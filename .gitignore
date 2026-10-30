@@ -1,0 +1,6 @@
+# Generated reports are rebuilt by scripts/run_miv_stadt.R.
+reports/*.txt
+
+.Rhistory
+.RData
+.Rproj.user/

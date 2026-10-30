@@ -1,0 +1,19 @@
+# Hand-written: roxygen2 is deliberately not a dependency of this throwaway harness.
+
+export(bag_fingerprint)
+export(canonicalize)
+export(changed_value_pairs)
+export(check_grain_unique)
+export(compare_canonical)
+export(coverage_ledger)
+export(diff_schemas)
+export(draft_lineage_spec)
+export(fetch_ods_dataset)
+export(normalize_column)
+export(print_report)
+export(resolve_source)
+export(validate_dataset)
+
+importFrom(dplyr, all_of)
+importFrom(dplyr, mutate)
+importFrom(rlang, .data)
