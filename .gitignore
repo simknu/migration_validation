@@ -1,6 +1,11 @@
 # Generated reports are rebuilt by scripts/run_miv_stadt.R.
 reports/*.txt
 
+# Frozen snapshots are derived from data/*.parquet and are rebuilt on first run
+# by resolve_source(), so they are not carried in the repo. Where `arrow` is
+# unavailable, rebuild them with the two bridge scripts (see README).
+snapshots/
+
 .Rhistory
 .RData
 .Rproj.user/

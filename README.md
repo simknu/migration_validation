@@ -68,7 +68,7 @@ configs/miv_stadt_derive.R  variant that also recomputes the derived columns
 pipeline/miv_stadt_fct.R    the pipeline under test, vendored (see CHANGES.md)
 pipeline/house_shims.R      minimal stand-ins for the house helpers it calls
 scripts/run_miv_stadt.R     the run script
-snapshots/                  frozen .RDS snapshots
+snapshots/                  frozen .RDS snapshots (gitignored, rebuilt on first run)
 reports/                    generated reports
 ```
 
@@ -154,8 +154,11 @@ one-time review is the actual assertion of intent**.
 `httr2` (fetch), `dplyr` / `tidyr` / `tibble` (reshape and compare), `digest`
 (hashing), `rlang`. `arrow` is a **soft** dependency, loaded lazily by
 `read_parquet_source()`: the harness still runs where only frozen `.RDS`
-snapshots exist, which is what makes the container build in this repo possible.
-Nothing else is added.
+snapshots exist. Nothing else is added.
+
+Snapshots are **not** committed. `resolve_source()` rebuilds them from
+`data/*.parquet` on the first run, which needs `arrow`; where `arrow` is
+unavailable, build them with the two bridge scripts below instead.
 
 ## Container note: the Parquet → RDS bridge
 
