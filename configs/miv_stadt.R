@@ -55,8 +55,9 @@ miv_stadt_config <- function() {
         migrate_published_to_long(run_date = miv_run_date())
     },
 
-    # `lnr` is deliberately NOT part of the grain key, although
-    # `miv_schema()$key` includes it: it is a running number, not an identity.
+    # `lnr` is deliberately NOT part of the grain key: it is a running number,
+    # not an identity. `miv_schema()$key` now agrees -- the harness found the
+    # mismatch and the pipeline was corrected (see pipeline/CHANGES.md).
     # In the published wide data it is a per-station counter (4018 distinct
     # values over 54478 rows, unique within `ort_id`); in the known-final it is
     # a global 0..53157 sequence. Keying on it would match almost nothing and

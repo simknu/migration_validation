@@ -12,7 +12,12 @@
 #'     \code{.TXT} export (measured columns only; the rest are derived).}
 #'   \item{hours}{Character. The 24 hourly labels \code{"1"}--\code{"24"}.}
 #'   \item{key}{Character. Row key of the long published data:
-#'     \code{lnr}, \code{ort_id}, \code{datum}, \code{richtung}, \code{stunde}.}
+#'     \code{ort_id}, \code{datum}, \code{richtung}, \code{stunde}.
+#'     \code{lnr} is deliberately NOT part of the key: it is a running number
+#'     assigned per export, not an identity. It is numbered differently in
+#'     different exports of the same records, so keying on it would make
+#'     provenance matching across exports unreliable and would let overlapping
+#'     records pass the append check as new.}
 #'   \item{tracking}{Character. The two change-tracking columns.}
 #'   \item{processed}{Character. Published columns without tracking, in order.}
 #'   \item{published}{Character. Full published column order (tracking last).}
@@ -58,7 +63,7 @@ miv_schema <- function() {
       "anzahl_fahrzeuge"
     ),
     hours = hours,
-    key = c("lnr", "ort_id", "datum", "richtung", "stunde"),
+    key = c("ort_id", "datum", "richtung", "stunde"),
     tracking = tracking,
     processed = processed,
     published = c(processed, tracking)
@@ -1103,7 +1108,9 @@ publish_miv <- function(
 #' is permitted and handled by the provenance matching below; only an entirely
 #' unpublished year is blocked.
 #'
-#' Provenance is matched by the long key within scope: a key present in both with
+#' Provenance is matched by the long key \code{(ort_id, datum, richtung,
+#' stunde)} within scope -- not by \code{lnr}, which is renumbered per export:
+#' a key present in both with
 #' an unchanged \code{anzahl_fahrzeuge} keeps both tracking dates; a changed
 #' value keeps \code{erstpublikation} and sets \code{letzte_aktualisierung} to
 #' the run date; a new key within an already-published year sets both to the run

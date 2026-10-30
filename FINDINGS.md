@@ -296,11 +296,10 @@ Still open, and all three are yours to decide rather than mine:
    fixing code.
 2. **`R?elibr?ke` at source.** `ort_id 10910` is damaged in the raw export
    itself, so no pipeline change can repair it.
-3. **`miv_schema()$key` still includes `lnr`.** That is safe for a single
-   export, since `lnr` is unique within one. But `publish_miv()` and
-   `update_miv()` match provenance on that key across exports, and `lnr` is
-   numbered per export — the old published data numbers it differently from the
-   2024 file. If a future export renumbers again, `erstpublikation` and
-   `letzte_aktualisierung` will be mis-assigned. Consider keying provenance on
-   `(ort_id, datum, richtung, stunde)` instead, which is unique in every file
-   seen here.
+3. ~~`miv_schema()$key` still includes `lnr`.~~ **Fixed.** The key is now
+   `(ort_id, datum, richtung, stunde)`, so `update_miv()` matches provenance on
+   it and `publish_miv()` detects overlap on it. Besides the mis-assigned
+   tracking dates, the old key let `publish_miv()` append duplicates: with
+   `lnr` in the key, re-publishing the same station-days from a renumbered
+   export found no overlap and passed the append guard as new records. See
+   `pipeline/CHANGES.md` §2.

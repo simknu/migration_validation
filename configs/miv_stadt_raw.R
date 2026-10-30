@@ -64,10 +64,11 @@ miv_stadt_raw_config <- function() {
         dplyr::select(dplyr::all_of(miv_schema()$published))
     },
 
-    # `lnr` is kept OUT of the grain and compared as an attribute instead. It
-    # comes straight from this raw file and matches exactly, so it is certified
-    # either way -- but as an attribute a divergence would be reported as a
-    # value difference rather than hidden inside a roster gap.
+    # `lnr` is kept OUT of the grain and compared as an attribute instead,
+    # matching `miv_schema()$key`. It comes straight from this raw file and
+    # matches exactly, so it is certified either way -- but as an attribute a
+    # divergence is reported as a value difference rather than hidden inside a
+    # roster gap.
     grain_key = c("ort_id", "datum", "richtung", "stunde"),
 
     sides = list(known_final = list(), new_output = list()),

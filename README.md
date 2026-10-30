@@ -100,6 +100,8 @@ pipeline/                   the pipeline under test, vendored (see its README)
 scripts/run_dataset.R       generic runner: takes a config, not a dataset
 scripts/selfcheck.R         engine self-check on synthetic data (seconds)
 snapshots/                  frozen .RDS snapshots (gitignored, rebuilt on first run)
+data/                       the raw export and join CSV are gitignored and
+                            supplied per run; the reference .parquet pair is tracked
 reports/                    generated reports
 ```
 

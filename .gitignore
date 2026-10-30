@@ -1,11 +1,14 @@
-# Generated reports are rebuilt by scripts/run_miv_stadt.R.
+# Generated reports are rebuilt by scripts/run_dataset.R.
 reports/*.txt
 
-# Frozen snapshots are derived from data/*.parquet and are rebuilt on first run
-# by resolve_source(), so they are not carried in the repo. Where `arrow` is
+# Frozen snapshots are derived from the inputs and are rebuilt on first run by
+# resolve_source(), so they are not carried in the repo. Where `arrow` is
 # unavailable, rebuild them with the two bridge scripts (see README).
 snapshots/
 
-.Rhistory
-.RData
-.Rproj.user/
+# The raw export and the join CSV are supplied per run, not carried here.
+# configs/ name the paths they expect under data/. The reference .parquet pair
+# is still tracked; drop it the same way if you want data/ empty of inputs too.
+data/*.txt
+data/*.TXT
+data/*.csv
