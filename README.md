@@ -43,15 +43,46 @@ deterministic representation noise.
 | Missing | real `NA` and post-trim `""` both count as empty → dropped before comparison |
 | Number | compared as numbers, not strings; exact by default, with a per-attribute `tolerance` hook |
 | Date / datetime | parsed and compared as `Date`/`POSIXct`, never as strings |
-| Binary | WKB geometry and friends compared as lowercase hex |
+| Binary | compared as lowercase hex |
+| Geo point | WKB *and* `"lat, lon"` text both decoded to coordinates and rendered `"lon,lat"` — the two sides of a portal migration disagree on representation, not position |
 | Literal `"NA"` | mapped to `NA` **on by default**; per-dataset switch; the report always states how many cells it converted |
 
 Numbers are rendered with `sprintf("%.15g")`, which formats element-wise.
 `format()` would pick one layout for the whole column, so two sides holding the
 same values among different neighbours would disagree spuriously.
 
+**Tolerance** is per attribute: `tolerance = 0.01` (absolute, shorthand) or
+`tolerance = list(abs = 0.01, rel = 0.05)`. It is applied by **quantization** —
+values are snapped to a grid and the grid points compared exactly — because bag
+semantics give no pairwise row correspondence to subtract across. The
+consequence is a boundary effect: two values closer than the tolerance can still
+land in adjacent buckets (with `abs = 1`, `1.4999` and `1.5001` become `1` and
+`2`). Tolerance here means *ignore differences below this scale*, not *pair up
+rows and subtract*. Relative tolerance quantizes in log space, so the bucket
+width scales with magnitude; zero has no relative neighbourhood and is left
+alone.
+
 Normalization is a per-attribute pluggable step, so swapping exact → tolerant on
 one numeric column disturbs nothing else.
+
+## Keys
+
+A key that was only **renamed** needs nothing: the rename map is applied before
+the grain key is read. A key whose **values** were transformed is the dangerous
+case, and is declared per side:
+
+```r
+sides = list(known_final = list(key_map = list(
+  ort_id = tibble::tibble(from = c("OLD1", "OLD2"), to = c("NEW1", "NEW2"))
+)))
+```
+
+`check_key_bijection()` verifies the map is one-to-one before anything trusts
+it. If two old key values reach one new value, rows collapse and every
+row-level diff below becomes a lie while the bag compare still returns a
+tidy-looking verdict — so drill-down is **refused** and the report says which
+key column failed. The verdict itself still runs, because bag semantics keep
+repeats.
 
 ## Layout
 
@@ -63,11 +94,11 @@ R/spec.R               content-matched draft lineage spec, schema diff
 R/report.R             coverage ledger, drill-down printer
 R/validate_dataset.R   entry point: resolve → canonicalize → verdict → report
 
-configs/miv_stadt.R         per-dataset config, a plain R list
-configs/miv_stadt_derive.R  variant that also recomputes the derived columns
-pipeline/miv_stadt_fct.R    the pipeline under test, vendored (see CHANGES.md)
-pipeline/house_shims.R      minimal stand-ins for the house helpers it calls
-scripts/run_miv_stadt.R     the run script
+configs/miv_stadt.R         per-dataset configs, plain R lists (two variants)
+configs/miv_stadt_raw.R     the real certification case, from the raw .TXT
+pipeline/                   the pipeline under test, vendored (see its README)
+scripts/run_dataset.R       generic runner: takes a config, not a dataset
+scripts/selfcheck.R         engine self-check on synthetic data (seconds)
 snapshots/                  frozen .RDS snapshots (gitignored, rebuilt on first run)
 reports/                    generated reports
 ```
@@ -80,11 +111,20 @@ report, move on.
 ## Running it
 
 ```bash
-Rscript scripts/run_miv_stadt.R both
+Rscript scripts/run_dataset.R configs/miv_stadt_raw.R   # certification: PASSES
+Rscript scripts/run_dataset.R configs/miv_stadt.R       # reconciliation vs the old export
 ```
 
-`migrate` runs only the step under test, `derive` only the derivation variant,
-`both` (the default) runs each in turn. Reports land in `reports/`.
+With no config function named, every `*_config` function the file defines runs
+in turn; name one to pick it. A config declares its own `sources` (the pipeline
+under test and its shims), so **a new dataset needs a config, not a script**.
+Reports land in `reports/`.
+
+Check the engine itself in a few seconds, without touching the data:
+
+```bash
+Rscript scripts/selfcheck.R
+```
 
 ## Fetch layer
 
@@ -149,16 +189,33 @@ one-time review is the actual assertion of intent**.
 - A reshape is covered only where both sides reduce to the same triple grain.
 - Row order is never checked — bag semantics by design.
 
+## Known gap
+
+Nothing verifies that a **tolerance** was set wide enough to be meaningful, or
+narrow enough to be safe — that is a judgement the config author makes, and the
+report states the tolerance in force rather than vouching for it.
+
 ## Dependencies
 
 `httr2` (fetch), `dplyr` / `tidyr` / `tibble` (reshape and compare), `digest`
-(hashing), `rlang`. `arrow` is a **soft** dependency, loaded lazily by
+(hashing), `rlang`. `readr` is used only by the container bridge scripts and one
+config fallback, not by the engine. `arrow` is a **soft** dependency, loaded lazily by
 `read_parquet_source()`: the harness still runs where only frozen `.RDS`
 snapshots exist. Nothing else is added.
 
 Snapshots are **not** committed. `resolve_source()` rebuilds them from
 `data/*.parquet` on the first run, which needs `arrow`; where `arrow` is
 unavailable, build them with the two bridge scripts below instead.
+
+## What the MIV run establishes
+
+`configs/miv_stadt_raw.R` is the certification: `process_miv()` on the raw
+export against the known-final. It **passes** — identical rosters and exact
+multiset equality on all eight substantive columns across 1'275'792 rows, with
+nothing stubbed, so the file reading and encoding detection are covered too.
+
+`configs/miv_stadt.R` compares the *older published* export against the same
+known-final and fails, correctly: those two genuinely differ. See `FINDINGS.md`.
 
 ## Container note: the Parquet → RDS bridge
 

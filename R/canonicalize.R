@@ -27,6 +27,7 @@ normalize_column <- function(x, rule = list(), na_string = TRUE) {
     type,
     string = normalize_string(x, use_na_string),
     hex = normalize_hex(x),
+    geopoint = normalize_geopoint(x, rule),
     number = normalize_number(x, rule$tolerance),
     date = normalize_date(x),
     datetime = normalize_datetime(x),
@@ -94,19 +95,140 @@ normalize_hex <- function(x) {
   list(value = out, n_na_string = 0L)
 }
 
+# A geo column reaches the two sides in different representations: a portal
+# export carries WKB binary, while the source CSV behind it carries "lat, lon"
+# text. Comparing either as a string would report every row as divergent, so
+# both are decoded to coordinates and rendered in one canonical order.
+#
+# Only the distinct values are decoded: a geo column typically holds a handful
+# of stations repeated across millions of rows, and per-row decoding would
+# dominate the run.
+normalize_geopoint <- function(x, rule = list()) {
+  digits <- rule$digits %||% 8L
+  order <- rule$order %||% "latlon"
+  if (!order %in% c("latlon", "lonlat")) {
+    stop("`order` for a geopoint must be \"latlon\" or \"lonlat\", not ", order)
+  }
+
+  chr <- if (is.list(x)) normalize_hex(x)$value else trimws(as.character(x))
+  chr[!is.na(chr) & chr == ""] <- NA_character_
+
+  present <- unique(chr[!is.na(chr)])
+  canonical <- vapply(
+    present,
+    function(v) geopoint_canonical(v, digits, order),
+    character(1),
+    USE.NAMES = FALSE
+  )
+
+  out <- rep(NA_character_, length(chr))
+  hit <- !is.na(chr)
+  out[hit] <- canonical[match(chr[hit], present)]
+  list(value = out, n_na_string = 0L)
+}
+
+# Renders as "lon,lat" whatever the input looked like.
+geopoint_canonical <- function(v, digits, order) {
+  if (grepl("^(00|01)[0-9a-fA-F]{40}$", v)) {
+    xy <- parse_wkb_point(v)
+    return(sprintf("%.*f,%.*f", digits, xy[[1L]], digits, xy[[2L]]))
+  }
+
+  parts <- strsplit(v, ",", fixed = TRUE)[[1L]]
+  if (length(parts) == 2L) {
+    nums <- suppressWarnings(as.numeric(trimws(parts)))
+    if (!anyNA(nums)) {
+      lon <- if (order == "latlon") nums[[2L]] else nums[[1L]]
+      lat <- if (order == "latlon") nums[[1L]] else nums[[2L]]
+      return(sprintf("%.*f,%.*f", digits, lon, digits, lat))
+    }
+  }
+
+  stop(
+    "cannot read as a geopoint: ", substr(v, 1L, 60L),
+    ". Expected WKB-point hex or a \"lat, lon\" pair."
+  )
+}
+
+# Little- or big-endian WKB Point; returns c(x = lon, y = lat).
+parse_wkb_point <- function(hex) {
+  bytes <- as.raw(strtoi(
+    substring(hex, seq(1L, 41L, by = 2L), seq(2L, 42L, by = 2L)),
+    base = 16L
+  ))
+  endian <- if (bytes[[1L]] == as.raw(1L)) "little" else "big"
+
+  geom_type <- readBin(bytes[2:5], "integer", n = 1L, size = 4L, endian = endian)
+  if (geom_type != 1L) {
+    stop("WKB geometry type ", geom_type, " is not a Point")
+  }
+
+  readBin(bytes[6:21], "double", n = 2L, size = 8L, endian = endian)
+}
+
 # Compared as numbers, not strings. `sprintf("%.15g")` formats element-wise, so
 # a column's rendering never depends on the other values present in it -- which
 # `format()` would, and which would make two sides disagree spuriously.
+#
+# Tolerance is applied by QUANTIZATION, because bag semantics give no pairwise
+# row correspondence to compare against: values are snapped to a grid and the
+# grid points are compared exactly. The consequence is a boundary effect -- two
+# values closer than the tolerance can still land in adjacent buckets (with
+# `abs = 1`, 1.4999 and 1.5001 become 1 and 2). Tolerance here means "ignore
+# differences below this scale", not "pair up rows and subtract".
 normalize_number <- function(x, tolerance = NULL) {
   v <- suppressWarnings(as.numeric(x))
+  tol <- parse_tolerance(tolerance)
 
-  if (!is.null(tolerance) && isTRUE(tolerance > 0)) {
-    v <- round(v / tolerance) * tolerance
+  if (!is.null(tol$abs)) {
+    v <- round(v / tol$abs) * tol$abs
+  }
+
+  if (!is.null(tol$rel)) {
+    # Quantize in log space, so the bucket width scales with magnitude. Zero
+    # has no relative neighbourhood and is left alone.
+    step <- log1p(tol$rel)
+    nz <- !is.na(v) & v != 0
+    v[nz] <- sign(v[nz]) * exp(round(log(abs(v[nz])) / step) * step)
   }
 
   out <- sprintf("%.15g", v)
   out[is.na(v)] <- NA_character_
   list(value = out, n_na_string = 0L)
+}
+
+# A bare number means absolute tolerance, for brevity in the common case.
+parse_tolerance <- function(tolerance) {
+  if (is.null(tolerance)) {
+    return(list(abs = NULL, rel = NULL))
+  }
+
+  if (is.numeric(tolerance) && length(tolerance) == 1L) {
+    return(list(abs = if (tolerance > 0) tolerance else NULL, rel = NULL))
+  }
+
+  if (!is.list(tolerance)) {
+    stop("`tolerance` must be a single number or a list with `abs` and/or `rel`")
+  }
+
+  unknown <- setdiff(names(tolerance), c("abs", "rel"))
+  if (length(unknown) > 0L) {
+    stop(
+      "unknown `tolerance` field(s): ", paste(unknown, collapse = ", "),
+      ". Use `abs` and/or `rel`."
+    )
+  }
+  for (f in c("abs", "rel")) {
+    v <- tolerance[[f]]
+    if (!is.null(v) && (!is.numeric(v) || length(v) != 1L || is.na(v) || v < 0)) {
+      stop("`tolerance$", f, "` must be a single non-negative number")
+    }
+  }
+
+  list(
+    abs = if (!is.null(tolerance$abs) && tolerance$abs > 0) tolerance$abs else NULL,
+    rel = if (!is.null(tolerance$rel) && tolerance$rel > 0) tolerance$rel else NULL
+  )
 }
 
 normalize_date <- function(x) {
@@ -197,6 +319,15 @@ canonicalize <- function(data, side_spec, spec, side = "side") {
     function(nm) normalize_column(data[[nm]], rules[[nm]] %||% list(), na_string)$value
   )
   names(key_norm) <- key_cols
+
+  # A key whose VALUES were transformed is translated into the other side's key
+  # space here. check_key_bijection() must vouch for the map first; a map that
+  # is not one-to-one collapses rows and makes every row-level diff a lie.
+  key_map <- side_spec[["key_map"]]
+  if (length(key_map) > 0L) {
+    key_norm <- apply_key_map(key_norm, key_map)
+  }
+
   entity_key <- do.call(paste, c(key_norm, list(sep = "\x1f")))
 
   attributes_out <- list()

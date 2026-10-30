@@ -37,6 +37,13 @@ validate_dataset <- function(spec, print = TRUE) {
     check_grain_unique(right, "new_output")
   )
 
+  # A key whose values were transformed must map one-to-one before any row-level
+  # diff can be trusted; a rename alone needs nothing, being handled by the
+  # rename map before the grain key is read.
+  key_map <- (spec[["sides"]][["known_final"]] %||% list())[["key_map"]] %||% list()
+  key_check <- check_key_bijection(key_map, left)
+  keys_ok <- nrow(key_check) == 0L || all(key_check$bijective)
+
   # A unique grain admits the cheaper set-based comparison, which is provably
   # identical to the counted one when each (entity_key, value) occurs at most
   # once. `compare_canonical()` falls back to counting when it does not hold.
@@ -75,6 +82,8 @@ validate_dataset <- function(spec, print = TRUE) {
       known_final = nrow(known_final)
     ),
     grain_check = grain_check,
+    key_check = key_check,
+    drilldown_ok = all(grain_check$unique) && keys_ok,
     unique_grain = unique_grain,
     comparison = comparison,
     ledger = ledger,

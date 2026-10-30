@@ -78,12 +78,30 @@ print_report <- function(result) {
       " -> new output ", result$n_rows$new_output,
       " | known-final ", result$n_rows$known_final, "\n", sep = "")
 
-  rule("1. GRAIN UNIQUENESS (guards row-level drill-down)")
+  rule("1. GRAIN & KEY INTEGRITY (guards row-level drill-down)")
   print(result$grain_check, n = Inf)
-  if (!all(result$grain_check$unique)) {
-    cat("\n  REFUSING row-level drill-down: the grain is not unique on at least\n")
-    cat("  one side, so row diffs would mislead. A silent many-to-one here is\n")
-    cat("  the subtle bug that invalidates everything downstream of it.\n")
+
+  if (nrow(result$key_check) == 0L) {
+    cat("\nkey-value map     : none declared (keys compared as they stand)\n")
+  } else {
+    cat("\nDeclared key-value map(s), checked for bijectivity:\n")
+    print(result$key_check, n = Inf, width = Inf)
+  }
+
+  if (!result$drilldown_ok) {
+    cat("\n  REFUSING row-level drill-down.\n")
+    if (!all(result$grain_check$unique)) {
+      cat("  The grain is not unique on at least one side, so row diffs would\n")
+      cat("  mislead. A silent many-to-one here is the subtle bug that\n")
+      cat("  invalidates everything downstream of it.\n")
+    }
+    if (nrow(result$key_check) > 0L && !all(result$key_check$bijective)) {
+      bad <- result$key_check$key_column[!result$key_check$bijective]
+      cat("  The key-value map is not a bijection for: ",
+          paste(bad, collapse = ", "), ".\n", sep = "")
+      cat("  Two old key values reaching one new value collapse rows, so any\n")
+      cat("  row-level diff below would be a lie.\n")
+    }
     cat("  The verdict below is unaffected and still runs (bag semantics).\n")
   }
 

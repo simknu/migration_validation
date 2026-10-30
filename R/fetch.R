@@ -14,8 +14,11 @@ ods_bases <- c(
 #' Resolve a configured source to an in-memory tibble, freezing a snapshot
 #'
 #' @param source A list describing the source. `kind` is one of `"object"`,
-#'   `"rds"`, `"parquet"`, `"csv"` or `"ods"`; the remaining fields depend on
-#'   the kind (`path`, `data`, or `dataset_id` plus `portal`).
+#'   `"rds"`, `"parquet"`, `"csv"`, `"reader"` or `"ods"`; the remaining fields
+#'   depend on the kind (`path`, `data`, `reader`, or `dataset_id` plus
+#'   `portal`). `"reader"` takes a `reader` function applied to `path`, for an
+#'   input whose own pipeline owns the parsing -- the harness stays unaware of
+#'   the format.
 #' @param cache_dir Character scalar. Directory for frozen `.RDS` snapshots.
 #' @param label Character scalar used to name the snapshot file. A `label`
 #'   field on `source` overrides it, so several configs over the same input
@@ -41,6 +44,7 @@ resolve_source <- function(source, cache_dir = "snapshots", label = "source") {
     source[["kind"]],
     parquet = read_parquet_source(source[["path"]]),
     csv = read_csv_source(source[["path"]]),
+    reader = read_via_reader(source),
     ods = fetch_ods_dataset(
       dataset_id = source[["dataset_id"]],
       portal = source[["portal"]],
@@ -68,6 +72,15 @@ read_parquet_source <- function(path) {
     )
   }
   tibble::as_tibble(arrow::read_parquet(path))
+}
+
+# The config owns the parsing; the harness only insists on a tibble back.
+read_via_reader <- function(source) {
+  reader <- source[["reader"]]
+  if (!is.function(reader)) {
+    stop("a source of kind \"reader\" needs a `reader` function")
+  }
+  tibble::as_tibble(reader(source[["path"]]))
 }
 
 read_csv_source <- function(path) {
