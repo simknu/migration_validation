@@ -177,3 +177,39 @@ restrict_to_keys <- function(side, keys) {
   )
   side
 }
+
+#' Annotate observed value pairs against a reviewed lookup table
+#'
+#' Marks which observed pairs the lookup accounts for. A pair the lookup does
+#' not list is unexplained; a lookup entry never observed in the data is dead,
+#' and both matter to a reviewer.
+#'
+#' @param pairs A `changed_value_pairs()` result.
+#' @param lookup A tibble with `known_final` and `new_output` columns, supplied
+#'   by the user and reviewed once. `NULL` means no lookup exists.
+#' @return `pairs` with an `in_lookup` column, carrying an `unused_lookup`
+#'   attribute listing reviewed entries absent from the data.
+#' @export
+annotate_with_lookup <- function(pairs, lookup = NULL) {
+  if (!is.null(lookup) &&
+        !(is.data.frame(lookup) &&
+            all(c("known_final", "new_output") %in% colnames(lookup)))) {
+    stop(
+      "a lookup must be a data frame with `known_final` and `new_output` ",
+      "columns; got ", paste(class(lookup), collapse = "/")
+    )
+  }
+
+  if (is.null(lookup) || nrow(pairs) == 0L) {
+    pairs$in_lookup <- if (is.null(lookup)) NA else logical(0)
+    attr(pairs, "unused_lookup") <- lookup[0, , drop = FALSE]
+    return(pairs)
+  }
+
+  observed <- paste0(pairs$known_final, "\x1f", pairs$new_output)
+  reviewed <- paste0(lookup$known_final, "\x1f", lookup$new_output)
+
+  pairs$in_lookup <- observed %in% reviewed
+  attr(pairs, "unused_lookup") <- lookup[!reviewed %in% observed, , drop = FALSE]
+  pairs
+}

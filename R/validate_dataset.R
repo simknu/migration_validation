@@ -17,20 +17,20 @@
 #'   verdict.
 #' @export
 validate_dataset <- function(spec, print = TRUE) {
-  examples_cap <- spec$examples_cap %||% 10L
+  examples_cap <- spec[["examples_cap"]] %||% 10L
 
-  original <- resolve_source(spec$original, spec$cache_dir %||% "snapshots",
-                             paste0(spec$dataset, "_original"))
-  known_final <- resolve_source(spec$known_final, spec$cache_dir %||% "snapshots",
-                                paste0(spec$dataset, "_known_final"))
+  original <- resolve_source(spec[["original"]], spec[["cache_dir"]] %||% "snapshots",
+                             paste0(spec[["dataset"]], "_original"))
+  known_final <- resolve_source(spec[["known_final"]], spec[["cache_dir"]] %||% "snapshots",
+                                paste0(spec[["dataset"]], "_known_final"))
 
   # The new transformation under test. The old pipeline left no code, so its
   # only ground truth is `known_final`; everything compared here is produced by
   # the new R code from the same original.
-  new_output <- spec$transform(original)
+  new_output <- spec[["transform"]](original)
 
-  left <- canonicalize(known_final, spec$sides$known_final %||% list(), spec, "known_final")
-  right <- canonicalize(new_output, spec$sides$new_output %||% list(), spec, "new_output")
+  left <- canonicalize(known_final, spec[["sides"]]$known_final %||% list(), spec, "known_final")
+  right <- canonicalize(new_output, spec[["sides"]]$new_output %||% list(), spec, "new_output")
 
   grain_check <- dplyr::bind_rows(
     check_grain_unique(left, "known_final"),
@@ -44,7 +44,7 @@ validate_dataset <- function(spec, print = TRUE) {
   comparison <- compare_canonical(left, right, examples_cap, unique_grain)
   draft_spec <- draft_lineage_spec(left, right, comparison$keys$shared)
 
-  lineage <- spec$lineage %||% dplyr::select(draft_spec, "column", "class")
+  lineage <- spec[["lineage"]] %||% dplyr::select(draft_spec, "column", "class")
   ledger <- coverage_ledger(comparison, lineage, left$diagnostics, right$diagnostics)
 
   # Value pairs are tabulated for every `changed` column AND for any column
@@ -52,18 +52,22 @@ validate_dataset <- function(spec, print = TRUE) {
   changed <- dplyr::filter(lineage, .data$class == "changed")$column
   failing <- dplyr::filter(comparison$per_attribute, !isTRUE(.data$equal))$attribute
   pair_cols <- intersect(union(changed, failing), names(left$attributes))
+  lookups <- spec[["lookup"]] %||% list()
   changed_pairs <- lapply(
     stats::setNames(pair_cols, pair_cols),
-    function(nm) changed_value_pairs(left, right, nm)
+    function(nm) annotate_with_lookup(
+      changed_value_pairs(left, right, nm),
+      lookups[[nm]]
+    )
   )
 
   result <- list(
-    dataset = spec$dataset,
+    dataset = spec[["dataset"]],
     run_at = format(Sys.time(), tz = "Europe/Zurich", usetz = TRUE),
-    grain_key = spec$grain_key,
+    grain_key = spec[["grain_key"]],
     sources = list(
-      known_final = spec$known_final$path %||% spec$known_final$dataset_id %||% "<object>",
-      original = spec$original$path %||% spec$original$dataset_id %||% "<object>"
+      known_final = spec[["known_final"]]$path %||% spec[["known_final"]]$dataset_id %||% "<object>",
+      original = spec[["original"]]$path %||% spec[["original"]]$dataset_id %||% "<object>"
     ),
     n_rows = list(
       original = nrow(original),
@@ -77,10 +81,10 @@ validate_dataset <- function(spec, print = TRUE) {
     draft_spec = draft_spec,
     lineage = lineage,
     changed_pairs = changed_pairs,
-    lookup_reviewed = spec$lookup_reviewed %||% list(),
+    lookup_reviewed = spec[["lookup_reviewed"]] %||% list(),
     schema_residue = diff_schemas(colnames(known_final), colnames(new_output)),
     examples_cap = examples_cap,
-    limits = spec$limits %||% default_limits()
+    limits = spec[["limits"]] %||% default_limits()
   )
 
   if (isTRUE(print)) {

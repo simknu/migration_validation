@@ -15,6 +15,7 @@ suppressPackageStartupMessages({
 for (f in list.files("R", pattern = "[.]R$", full.names = TRUE)) source(f)
 source("pipeline/house_shims.R")
 source("pipeline/miv_stadt_fct.R")
+source("configs/bezeichnung_lookup.R")
 source("configs/miv_stadt.R")
 source("configs/miv_stadt_derive.R")
 

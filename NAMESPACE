@@ -1,5 +1,6 @@
 # Hand-written: roxygen2 is deliberately not a dependency of this throwaway harness.
 
+export(annotate_with_lookup)
 export(bag_fingerprint)
 export(canonicalize)
 export(changed_value_pairs)

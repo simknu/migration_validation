@@ -65,7 +65,7 @@ R/validate_dataset.R   entry point: resolve → canonicalize → verdict → rep
 
 configs/miv_stadt.R         per-dataset config, a plain R list
 configs/miv_stadt_derive.R  variant that also recomputes the derived columns
-pipeline/miv_stadt_fct.R    the pipeline under test, vendored VERBATIM
+pipeline/miv_stadt_fct.R    the pipeline under test, vendored (see CHANGES.md)
 pipeline/house_shims.R      minimal stand-ins for the house helpers it calls
 scripts/run_miv_stadt.R     the run script
 snapshots/                  frozen .RDS snapshots

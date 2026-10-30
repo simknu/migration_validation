@@ -76,7 +76,7 @@ miv_stadt_config <- function() {
     # draft spec for what content-matching proposes.
     lineage = tibble::tribble(
       ~column,                  ~class,
-      "bezeichnung",            "unchanged",
+      "bezeichnung",            "changed",
       "standort",               "unchanged",
       "wochentag",              "unchanged",
       "arbeitstag",             "unchanged",
@@ -88,10 +88,18 @@ miv_stadt_config <- function() {
       "letzte_aktualisierung",  "new"
     ),
 
-    # No lookup table was supplied for any `changed` column, so nothing
-    # asserts the `lnr` renumbering. The report says so rather than implying
-    # the pairs certify themselves.
-    lookup_reviewed = list(lnr = FALSE),
+    # A reviewed lookup is what turns a `changed` column from "asserted by
+    # nothing" into "asserted by you". Neither is reviewed yet, so the report
+    # says so rather than implying the pairs certify themselves.
+    #
+    # configs/bezeichnung_lookup.R holds the 10 observed `bezeichnung` pairs,
+    # UNREVIEWED. Once you have confirmed which side is authoritative, prune it
+    # and switch both lines below on -- deliberately left off, because wiring in
+    # an unreviewed table would make the report claim an assertion nobody made.
+    #
+    #   lookup = list(bezeichnung = bezeichnung_lookup()),
+    #   lookup_reviewed = list(bezeichnung = TRUE, lnr = FALSE),
+    lookup_reviewed = list(bezeichnung = FALSE, lnr = FALSE),
 
     examples_cap = 10L,
 
@@ -110,6 +118,17 @@ miv_stadt_config <- function() {
         "cover `derive_miv_cols()`: the published input already carries",
         "arbeitstag/kennzahl/ort_richtung_id, so they are passed through, not",
         "recomputed. Use configs/miv_stadt_derive.R for that."
+      ),
+      paste(
+        "`bezeichnung` is classed `changed` and its lookup is NOT wired in, so",
+        "its 10 differing pairs are asserted by nothing. See",
+        "configs/bezeichnung_lookup.R."
+      ),
+      paste(
+        "The two files carry different station rosters, which the pipeline",
+        "cannot have caused (it emitted exactly 24 rows per input row, losing",
+        "none). 1'368 station-days were never compared: the guarantee covers",
+        "1'275'216 of the 1'307'472 rows produced, i.e. 97.5%."
       ),
       paste(
         "Snapshots were bridged from Parquet to .RDS in this container (no",

@@ -23,33 +23,33 @@ ods_bases <- c(
 #' @return A tibble, carrying `migval_source` and `migval_frozen_at` attributes.
 #' @export
 resolve_source <- function(source, cache_dir = "snapshots", label = "source") {
-  if (identical(source$kind, "object")) {
-    return(tibble::as_tibble(source$data))
+  if (identical(source[["kind"]], "object")) {
+    return(tibble::as_tibble(source[["data"]]))
   }
 
-  if (identical(source$kind, "rds")) {
-    return(tibble::as_tibble(readRDS(source$path)))
+  if (identical(source[["kind"]], "rds")) {
+    return(tibble::as_tibble(readRDS(source[["path"]])))
   }
 
   # Everything else is fetched or parsed once and frozen.
-  snapshot <- file.path(cache_dir, paste0(source$label %||% label, ".rds"))
+  snapshot <- file.path(cache_dir, paste0(source[["label"]] %||% label, ".rds"))
   if (file.exists(snapshot)) {
     return(tibble::as_tibble(readRDS(snapshot)))
   }
 
   data <- switch(
-    source$kind,
-    parquet = read_parquet_source(source$path),
-    csv = read_csv_source(source$path),
+    source[["kind"]],
+    parquet = read_parquet_source(source[["path"]]),
+    csv = read_csv_source(source[["path"]]),
     ods = fetch_ods_dataset(
-      dataset_id = source$dataset_id,
-      portal = source$portal,
-      format = source$format %||% "parquet"
+      dataset_id = source[["dataset_id"]],
+      portal = source[["portal"]],
+      format = source[["format"]] %||% "parquet"
     ),
-    stop("unknown source kind: ", source$kind)
+    stop("unknown source kind: ", source[["kind"]])
   )
 
-  attr(data, "migval_source") <- source$path %||% source$dataset_id
+  attr(data, "migval_source") <- source[["path"]] %||% source[["dataset_id"]]
   attr(data, "migval_frozen_at") <- format(Sys.time(), tz = "Europe/Zurich")
 
   dir.create(cache_dir, showWarnings = FALSE, recursive = TRUE)

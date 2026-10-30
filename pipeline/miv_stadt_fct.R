@@ -542,7 +542,7 @@ derive_miv_cols <- function(data, call = rlang::caller_env()) {
       kennzahl = dplyr::if_else(
         .data$arbeitstag == "Wochenende",
         "Durchschnittlicher Tagesverkehr (DTV)",
-        "Durchschnittlicher Tagesverkehr (DTV); Durchschnittlicher Werktagsverkehr (DWV)"
+        "Durchschnittlicher Tagesverkehr (DTV),Durchschnittlicher Werktagsverkehr (DWV)"
       ),
       ort_richtung_id = stringr::str_c(.data$ort_id, .data$richtung)
     )

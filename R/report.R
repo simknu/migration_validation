@@ -144,6 +144,17 @@ print_report <- function(result) {
           cat("      ... and ", nrow(pairs) - result$examples_cap,
               " more differing pair(s)\n", sep = "")
         }
+        if (!all(is.na(pairs$in_lookup))) {
+          n_unexplained <- sum(!pairs$in_lookup)
+          cat("      ", n_unexplained, " of ", nrow(pairs),
+              " differing pair(s) are NOT in the reviewed lookup.\n", sep = "")
+          unused <- attr(pairs, "unused_lookup")
+          if (!is.null(unused) && nrow(unused) > 0L) {
+            cat("      ", nrow(unused),
+                " reviewed lookup entr(y/ies) never occur in the data:\n", sep = "")
+            print(unused, n = Inf, width = Inf)
+          }
+        }
       }
     }
     cat("\n  These pairs are derived from the pipeline, so checking them against\n")

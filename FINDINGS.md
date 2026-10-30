@@ -33,7 +33,7 @@ provenance on `miv_schema()$key`. If `lnr` is renumbered between exports, that
 join is unreliable and `erstpublikation` / `letzte_aktualisierung` will be
 mis-assigned.
 
-## 2. `kennzahl` — `derive_miv_cols()` disagrees with the published value
+## 2. `kennzahl` — `derive_miv_cols()` disagreed with the published value — FIXED
 
 **This is the finding with the widest blast radius**, and it is invisible to
 the migration step. It only surfaces in `configs/miv_stadt_derive.R`, which
@@ -48,10 +48,20 @@ Comma-no-space versus **semicolon-space**. One differing pair, **911'928 keys
 affected** — 71% of the dataset. `arbeitstag` and `ort_richtung_id` recompute
 correctly, so the rest of `derive_miv_cols()` is sound.
 
-The next `publish_miv()` or `update_miv()` run from raw `.TXT` would silently
-flip `kennzahl` on every `Werktage` row. Either `derive_miv_cols()` should emit
-the separator the published data uses, or the published data needs a one-off
-correction — that is your call, not the harness's.
+The next `publish_miv()` or `update_miv()` run from raw `.TXT` would have
+silently flipped `kennzahl` on every `Werktage` row.
+
+**Fixed, and the fix is verified.** You chose to change `derive_miv_cols()` to
+emit `,`; the one-line diff is in `pipeline/CHANGES.md` and needs the same edit
+in the house package. Re-running `configs/miv_stadt_derive.R` afterwards:
+
+| | differing pairs | agreeing keys |
+| --- | --- | --- |
+| before | 1 (911'928 keys affected) | 363'288 |
+| after | **0** | **1'275'216** |
+
+`kennzahl` now matches on every shared key when recomputed, which is what
+confirms the fix is complete rather than merely plausible.
 
 ## 3. `bezeichnung` is encoding-damaged on **both** sides
 
@@ -138,24 +148,100 @@ show them diverging, and that will not mean anything either.
 
 ## What is certified, and what is not
 
-**Certified** — exact multiset equality over all 1'275'216 shared keys:
-`anzahl_fahrzeuge`, `standort`, `wochentag`, `arbeitstag`, `ort_richtung_id`
-(and `kennzahl` for the pass-through migration, though not when recomputed).
+**Certified** — exact multiset equality over all 1'275'216 shared keys, in
+*both* runs: `anzahl_fahrzeuge`, `standort`, `wochentag`, `arbeitstag`,
+`ort_richtung_id` and `kennzahl`. The last of these holds under recomputation
+too, now that the separator is fixed.
 
-**Not certified:** `bezeichnung` (needs your lookup), `lnr` (regenerated,
-asserted by nothing), `kennzahl` under recomputation, the 1'368 non-shared
-station-days, and both tracking columns.
+**Not certified:** `bezeichnung` (awaiting your lookup — 10 differing pairs),
+`lnr` (regenerated, asserted by nothing), the 1'368 non-shared station-days
+(2.5% of rows), and both tracking columns.
 
-## Open questions
+Both runs therefore still end in **FAIL**, and correctly so: `bezeichnung` and
+`lnr` genuinely diverge, and the rosters genuinely differ. A PASS would require
+the raw `.TXT` inputs plus your reviewed `bezeichnung` lookup.
 
-1. **The key.** The harness drops `lnr` from the grain key on the evidence
-   above. Confirm, or name the key you want.
-2. **The roster.** Were these two files produced from the same source export?
-   If the known-final came from raw `.TXT` while the original is the currently
-   published wide dataset, then this run is a *reconciliation* of two datasets,
-   not a certification of the pipeline — and certifying the pipeline properly
-   needs the raw `.TXT` inputs plus
-   `detailplane-und-geokoordinaten-miv-zahlstellen-stadt-stgallen.csv`.
-3. **`bezeichnung`.** Which side is authoritative, and is there a lookup table?
-4. **`kennzahl`.** Should `derive_miv_cols()` switch to `,`, or should the
-   published data be corrected to `; `?
+## Does a changed data source invalidate the test?
+
+**No — but it narrows what the test certifies.** Here is the line, drawn from
+the data rather than from assumption.
+
+### The pipeline is exonerated of the roster gap
+
+`migrate_published_to_long()` turned 54'478 wide rows into **exactly**
+54'478 × 24 = 1'307'472 long rows. Not one row lost, not one duplicated. Its
+steps are `select(-tagestotal)` → `pivot_miv_long()` → `mutate(tracking)` →
+`select(published)`, none of which can drop a row, and `join_miv()` is a
+`left_join`, which cannot either. So the 1'368 non-shared station-days **cannot**
+have been caused by the pipeline. They are upstream — consistent with the source
+having changed.
+
+### What still holds, regardless of provenance
+
+The reshape is certified on the overlap, and this is the part that matters most.
+Across **1'275'216** shared keys, every hourly count landed on the correct
+`(station, date, direction, hour)` and matched an **independently produced** long
+dataset exactly — zero divergences. Had the pivot mis-assigned even one hour
+column, or transposed direction and hour, that comparison would have failed
+loudly. It did not. The same holds for `standort`, `wochentag`, `arbeitstag` and
+`ort_richtung_id`.
+
+Two findings are also untouched by provenance, because neither is a matching
+question:
+
+- **`kennzahl`** compares what `derive_miv_cols()` *computes* against what is
+  *published*, on shared keys only. Source drift cannot manufacture a systematic
+  `;`-versus-`,` separator difference across 911'928 keys. This was a real
+  pipeline defect.
+- **`lnr`** is about the column's semantics *within* each file — a per-station
+  counter in one, a global sequence in the other. Nothing about row provenance
+  changes that.
+
+### What the changed source does weaken
+
+1. **Coverage shrinks, honestly.** 1'368 station-days (32'256 hourly rows) were
+   never compared. The guarantee covers **1'275'216 of the 1'307'472** rows the
+   pipeline produced — **97.5%**. The remaining 2.5% is uncovered, and the report
+   prints it as such rather than quietly passing.
+2. **Three `bezeichnung` pairs become ambiguous.** The label changes (dropping
+   `" Stadt"`, `Stadt SG Flurhofstr 68`) are exactly what a newer export would
+   legitimately contain, so they may be drift rather than defect.
+3. **Six `bezeichnung` pairs are *not* excused by it.** Mojibake and a
+   30-character truncation are mechanical damage, not editorial updates: no
+   plausible source revision renames `Bären` to `Bäre` or `Grossackers. 14` to
+   `Grossackers. 1`. Those stand as defects however the files were produced. So
+   does `R?elibr?ke` being damaged in the known-final itself.
+
+### So what is this run?
+
+A **reconciliation of two datasets that happens to certify the reshape on their
+overlap** — not yet a certification of the pipeline. To get the latter, re-run
+with the raw `.TXT` files that produced `miv_transformed.parquet`, plus
+`detailplane-und-geokoordinaten-miv-zahlstellen-stadt-stgallen.csv`. The rosters
+would then coincide and the verdict could actually reach PASS. The harness needs
+no changes for that: point `original` at the raw files and set `transform` to
+`process_miv()`.
+
+**The distinction that matters:** none of this is the harness hiding a problem.
+A run that cannot certify something reports it as uncovered, which is why the
+coverage ledger exists.
+
+## Decisions taken, and what is still open
+
+| Question | Decision |
+| --- | --- |
+| Grain key | **Confirmed:** `lnr` dropped; grain is `(ort_id, datum, richtung, stunde)`. |
+| `kennzahl` separator | **Fixed** in `derive_miv_cols()` to `,`; see `pipeline/CHANGES.md` and the verification in `reports/miv_stadt_derive.txt`. |
+| `bezeichnung` | **Awaiting your lookup table.** `configs/bezeichnung_lookup.R` holds the 10 observed pairs, unreviewed and deliberately not wired in. |
+| Provenance | Source may have changed; this does not invalidate the test — see the section above for exactly what it does and does not affect. |
+
+Still open:
+
+1. **The `bezeichnung` lookup.** Which side is authoritative, per pair? Note that
+   a blanket `latin-1 → utf-8` repair would corrupt `ort_id 11282`
+   (`Rosenb./Grüberg`), which is already valid UTF-8 in the same column.
+2. **The raw `.TXT` inputs**, if you want a certification rather than a
+   reconciliation.
+3. **`lnr`** remains asserted by nothing, and `miv_schema()$key` still includes
+   it — which makes the provenance join in `publish_miv()` / `update_miv()`
+   unreliable if `lnr` is renumbered between exports.

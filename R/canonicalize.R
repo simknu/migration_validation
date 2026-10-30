@@ -142,7 +142,7 @@ normalize_logical <- function(x) {
 canonicalize <- function(data, side_spec, spec, side = "side") {
   data <- tibble::as_tibble(data)
 
-  rename <- side_spec$rename
+  rename <- side_spec[["rename"]]
   if (length(rename) > 0L) {
     present <- intersect(names(rename), colnames(data))
     missing_renames <- setdiff(names(rename), colnames(data))
@@ -158,7 +158,7 @@ canonicalize <- function(data, side_spec, spec, side = "side") {
   # Melt replicated measures: the wide column name becomes a key dimension
   # (e.g. the 24 hourly columns become `stunde`), not an attribute, because
   # they carry one measure replicated across that dimension.
-  reshape <- side_spec$reshape
+  reshape <- side_spec[["reshape"]]
   if (!is.null(reshape)) {
     missing_cols <- setdiff(reshape$cols, colnames(data))
     if (length(missing_cols) > 0L) {
@@ -175,7 +175,7 @@ canonicalize <- function(data, side_spec, spec, side = "side") {
     )
   }
 
-  key_cols <- spec$grain_key
+  key_cols <- spec[["grain_key"]]
   missing_key <- setdiff(key_cols, colnames(data))
   if (length(missing_key) > 0L) {
     stop(
@@ -184,11 +184,11 @@ canonicalize <- function(data, side_spec, spec, side = "side") {
     )
   }
 
-  drop_cols <- union(spec$ignore %||% character(0), side_spec$ignore %||% character(0))
+  drop_cols <- union(spec[["ignore"]] %||% character(0), side_spec[["ignore"]] %||% character(0))
   attr_cols <- setdiff(colnames(data), union(key_cols, drop_cols))
 
-  rules <- spec$normalize %||% list()
-  na_string <- spec$na_string %||% TRUE
+  rules <- spec[["normalize"]] %||% list()
+  na_string <- spec[["na_string"]] %||% TRUE
 
   # Keys are normalized with the same rules as values, so a Date on one side
   # and an ISO string on the other describe the same entity.
