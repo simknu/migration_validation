@@ -6,9 +6,10 @@ reports/*.txt
 # unavailable, rebuild them with the two bridge scripts (see README).
 snapshots/
 
-# The raw export and the join CSV are supplied per run, not carried here.
-# configs/ name the paths they expect under data/. The reference .parquet pair
-# is still tracked; drop it the same way if you want data/ empty of inputs too.
-data/*.txt
-data/*.TXT
-data/*.csv
+# No source data is carried in this repo. Every input is supplied per run;
+# configs/ name the paths they expect under data/.
+data/
+
+.Rhistory
+.RData
+.Rproj.user/

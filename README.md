@@ -100,8 +100,7 @@ pipeline/                   the pipeline under test, vendored (see its README)
 scripts/run_dataset.R       generic runner: takes a config, not a dataset
 scripts/selfcheck.R         engine self-check on synthetic data (seconds)
 snapshots/                  frozen .RDS snapshots (gitignored, rebuilt on first run)
-data/                       the raw export and join CSV are gitignored and
-                            supplied per run; the reference .parquet pair is tracked
+data/                       gitignored; every input is supplied per run
 reports/                    generated reports
 ```
 
@@ -218,6 +217,19 @@ nothing stubbed, so the file reading and encoding detection are covered too.
 
 `configs/miv_stadt.R` compares the *older published* export against the same
 known-final and fails, correctly: those two genuinely differ. See `FINDINGS.md`.
+
+## Inputs
+
+No source data is carried in this repo. Each config names the paths it expects
+under `data/`, and you supply them per run:
+
+| Config | Needs under `data/` |
+| --- | --- |
+| `miv_stadt_raw.R` | `MIV_2024_open_data.txt`, `detailplane-und-geokoordinaten-miv-zahlstellen-stadt-stgallen.csv` |
+| `miv_stadt.R` (both variants) | `miv_original.parquet`, `miv_transformed.parquet` |
+
+A missing input fails the run with the path it wanted, rather than silently
+comparing less.
 
 ## Container note: the Parquet → RDS bridge
 
