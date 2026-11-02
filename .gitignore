@@ -1,0 +1,15 @@
+# Generated reports are rebuilt by scripts/run_dataset.R.
+reports/*.txt
+
+# Frozen snapshots are derived from the inputs and are rebuilt on first run by
+# resolve_source(), so they are not carried in the repo. Where `arrow` is
+# unavailable, rebuild them with the two bridge scripts (see README).
+snapshots/
+
+# No source data is carried in this repo. Every input is supplied per run;
+# configs/ name the paths they expect under data/.
+data/
+
+.Rhistory
+.RData
+.Rproj.user/
