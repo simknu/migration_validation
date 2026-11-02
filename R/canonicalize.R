@@ -56,9 +56,35 @@ infer_value_type <- function(x) {
   "string"
 }
 
+# Bring a character vector to marked UTF-8 without corrupting it.
+#
+# `enc2utf8()` alone is not enough. A string R has not marked ("unknown")
+# is assumed to be in the NATIVE encoding, so in a non-UTF-8 locale -- which is
+# what an Rscript run usually gets -- bytes that are already UTF-8 get
+# re-encoded and come out as mojibake. Worse for a comparison harness, the same
+# text can carry identical bytes with different encoding marks on the two
+# sides, and `==` then reports them unequal.
+#
+# So an unmarked string whose bytes are already valid UTF-8 is MARKED rather
+# than converted, and only genuinely non-UTF-8 bytes go through `enc2utf8()`.
+as_utf8 <- function(x) {
+  x <- as.character(x)
+  unmarked <- !is.na(x) & Encoding(x) == "unknown"
+  if (any(unmarked)) {
+    # iconv() returns NA for bytes that are not valid UTF-8, which is the test.
+    already <- unmarked & !is.na(iconv(x, from = "UTF-8", to = "UTF-8"))
+    if (any(already)) {
+      marked <- x[already]
+      Encoding(marked) <- "UTF-8"
+      x[already] <- marked
+    }
+  }
+  enc2utf8(x)
+}
+
 # UTF-8, trimmed, internal whitespace runs collapsed to one space.
 normalize_string <- function(x, na_string) {
-  out <- enc2utf8(as.character(x))
+  out <- as_utf8(x)
   out <- trimws(out)
   out <- gsub("[[:space:]]+", " ", out, perl = TRUE)
 

@@ -140,6 +140,22 @@ ok("an unexplained pair is flagged", !any(annotate_with_lookup(
 ok("a dead lookup entry is reported", nrow(attr(annotate_with_lookup(
   pairs, tibble(known_final = "Q", new_output = "Q2")), "unused_lookup")) == 1L)
 ok("malformed lookup errors", errs(annotate_with_lookup(pairs, c(1, 2))))
+# A hand-written lookup carries whatever encoding mark its file was parsed with.
+# Identical bytes with a different mark must still match, or every reviewed pair
+# reads as unexplained -- which is how this went unnoticed the first time.
+ok("lookup matches across encoding marks", {
+  umlaut_utf8 <- normalize_column("St.Gallen Stadt Schwarzer B\u00e4ren")$value
+  unmarked <- "St.Gallen Stadt Schwarzer B\u00e4ren"
+  Encoding(unmarked) <- "unknown"
+  p2 <- tibble(known_final = umlaut_utf8, new_output = "x", n_keys = 1L)
+  all(annotate_with_lookup(
+    p2, tibble(known_final = unmarked, new_output = "x"))$in_lookup)
+})
+ok("lookup tolerates stray whitespace", {
+  p2 <- tibble(known_final = "a b", new_output = "x", n_keys = 1L)
+  all(annotate_with_lookup(
+    p2, tibble(known_final = "  a   b ", new_output = "x"))$in_lookup)
+})
 
 cat("\n", strrep("-", 64), "\n", sep = "")
 if (failures == 0L) {

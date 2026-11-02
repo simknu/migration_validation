@@ -191,19 +191,42 @@ print_report <- function(result) {
   print(result$draft_spec, n = Inf, width = Inf)
 
   rule("8. VERDICT")
-  if (result$comparison$pass) {
-    cat("PASS - the two sides reduce to identical multisets of triples.\n")
+  v <- result$verdict
+  if (v$pass) {
+    cat("PASS - identical multisets of triples over the ", v$n_covered,
+        " covered column(s),\n       with identical entity-key rosters.\n", sep = "")
   } else {
     cat("FAIL - the multisets differ.\n")
-    ex <- result$comparison$examples
+  }
+
+  if (length(v$excluded) > 0L) {
+    cat("\n", length(v$excluded),
+        " column(s) excluded from the verdict, having no applicable check:\n  ",
+        paste(v$excluded, collapse = ", "), "\n", sep = "")
+    cat("  They are reported as gaps in section 4, not as passes.\n")
+    if (length(v$excluded_differ) > 0L) {
+      cat("  NOTE: ", paste(v$excluded_differ, collapse = ", "),
+          " DO differ between the two sides.\n", sep = "")
+      cat("  Excluded because nothing can assert them, NOT because they agree.\n")
+    }
+  }
+
+  if (!v$pass) {
+    # Only the covered columns can cause a failure, so only their divergences
+    # are shown; an excluded column's diff would be noise here.
+    covered <- dplyr::filter(result$ledger, .data$covered)$attribute
+    ex <- dplyr::filter(result$comparison$examples, .data$attribute %in% covered)
     if (nrow(ex) > 0L) {
-      cat("\nExample diverging triples (capped at ", result$examples_cap,
-          " per attribute):\n", sep = "")
+      cat("\nExample diverging triples, covered columns only (capped at ",
+          result$examples_cap, " per attribute):\n", sep = "")
       print(
         mutate(ex, entity_key = gsub("\x1f", " | ", .data$entity_key)),
         n = Inf,
         width = Inf
       )
+    } else if (!result$comparison$keys$equal) {
+      cat("\nNo covered column diverges: the failure is the entity-key roster",
+          "\n(see section 2).\n")
     }
   }
 
