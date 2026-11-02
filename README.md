@@ -9,6 +9,86 @@ full-data comparison in R — zero external calls, nothing uploaded. Any LLM
 review is diagnosis only, never the guarantee. The old pipeline left no code,
 so its only ground truth is its final output.
 
+## Quickstart: a new dataset
+
+### 1. What you need
+
+| | What | Notes |
+| --- | --- | --- |
+| **Original** | the pre-transform input | a local file, or an ODS `dataset_id` |
+| **Known-final** | the old tool's output — **ground truth** | the old pipeline left no code, so its output is the only truth there is |
+| **New pipeline** | the R transformation under test | vendored into `pipeline/`, so the real code is tested rather than a paraphrase of it |
+
+Either data side may be `parquet`, `csv`, `rds`, an in-memory `object`, `ods`
+(fetched through the exports endpoint and frozen), or `reader` — a function you
+supply, for an input whose own pipeline owns the parsing.
+
+### 2. Write one config
+
+Copy `configs/miv_stadt_raw.R` as a template. Five fields are required:
+
+```r
+my_dataset_config <- function() {
+  list(
+    dataset     = "my_dataset",                              # names the report
+    sources     = c("pipeline/my_fct.R"),                    # sourced before the run
+    original    = list(kind = "parquet", path = "data/in.parquet"),
+    known_final = list(kind = "parquet", path = "data/truth.parquet"),
+    transform   = function(original) my_pipeline(original),  # the code under test
+    grain_key   = c("id", "date")                            # what makes a row unique
+  )
+}
+```
+
+Everything else is optional, and needed only where the two sides do not line up
+cleanly:
+
+| Field | For |
+| --- | --- |
+| `normalize` | per column: `number` (with `tolerance = list(abs=, rel=)`), `date`, `datetime`, `hex`, `geopoint`, `string` |
+| `sides$<side>$rename` | a column that changed name |
+| `sides$<side>$reshape` | wide ↔ long: melts wide columns into a key dimension |
+| `sides$<side>$key_map` | key *values* transformed — verified to be a bijection first |
+| `lineage`, `lookup`, `lookup_reviewed` | lineage classes and the reviewed lookup for `changed` columns |
+| `ignore`, `na_string`, `examples_cap`, `limits`, `cache_dir` | per-dataset switches |
+
+### 3. Run it
+
+```bash
+Rscript scripts/run_dataset.R configs/my_dataset.R
+```
+
+That is the whole interface — the `R/` functions are never called directly.
+`validate_dataset()` chains resolve → canonicalize → verdict → report, and the
+report lands in `reports/my_dataset.txt`. With no config function named, every
+`*_config` function the file defines runs in turn; name one to pick it. **A new
+dataset needs a config, not a script.**
+
+Check the engine itself in seconds, without touching any data:
+
+```bash
+Rscript scripts/selfcheck.R
+```
+
+### 4. Expect the first run to fail, and to be useful
+
+Leave `lineage` out the first time. The report's §7 prints a content-matched
+draft spec: review it once and paste it in as `lineage`, and from then on the
+coverage ledger classifies each column against your stated intent instead of
+guessing.
+
+A first FAIL is normal and informative:
+
+- **§3 `equal_on_shared_keys`** separates *do the values agree where both sides
+  have the row* from *do the rosters agree*. This is usually the column that
+  explains the failure.
+- **§4** lists the columns no check covers — an absent check is printed as
+  loudly as a failure.
+- **`changed` columns** stay "asserted by nothing" until you supply a reviewed
+  lookup table.
+
+The harness does not pretend to certify what it cannot.
+
 ## The guarantee
 
 Both the known-final output and the new transformation's output are reduced to
@@ -109,23 +189,15 @@ lineage spec, per-attribute normalization overrides, tolerance, `na_string`
 switch. There is no master registry and no loop — you run one dataset, read the
 report, move on.
 
-## Running it
+## Running the MIV configs
 
 ```bash
 Rscript scripts/run_dataset.R configs/miv_stadt_raw.R   # certification: PASSES
 Rscript scripts/run_dataset.R configs/miv_stadt.R       # reconciliation vs the old export
 ```
 
-With no config function named, every `*_config` function the file defines runs
-in turn; name one to pick it. A config declares its own `sources` (the pipeline
-under test and its shims), so **a new dataset needs a config, not a script**.
-Reports land in `reports/`.
-
-Check the engine itself in a few seconds, without touching the data:
-
-```bash
-Rscript scripts/selfcheck.R
-```
+Reports land in `reports/`. See **Quickstart** above for the general form, and
+**Inputs** below for the files each config expects.
 
 ## Fetch layer
 
@@ -218,7 +290,7 @@ nothing stubbed, so the file reading and encoding detection are covered too.
 `configs/miv_stadt.R` compares the *older published* export against the same
 known-final and fails, correctly: those two genuinely differ. See `FINDINGS.md`.
 
-## Inputs
+## Inputs for the MIV configs
 
 No source data is carried in this repo. Each config names the paths it expects
 under `data/`, and you supply them per run:
