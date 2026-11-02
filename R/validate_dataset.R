@@ -56,6 +56,22 @@ validate_dataset <- function(spec, print = TRUE) {
 
   # Value pairs are tabulated for every `changed` column AND for any column
   # that failed: on a failure the distinct pairs are what explains it.
+  # The verdict is taken over the columns a check actually covers. A column
+  # classed `new`/`dropped`, or present on one side only, has no ground truth
+  # by definition, so it can neither pass nor fail -- it is a gap, reported as
+  # one in section 4. Counting it would make the verdict depend on data nothing
+  # can assert: the MIV tracking columns are stamped with the run date, so an
+  # all-columns verdict flips purely on the calendar. The exclusion is always
+  # named in the report, never silent.
+  covered_rows <- dplyr::filter(ledger, .data$covered)
+  verdict <- list(
+    pass = isTRUE(all(covered_rows$equal)) && isTRUE(comparison$keys$equal),
+    n_covered = nrow(covered_rows),
+    excluded = ledger$attribute[!ledger$covered],
+    excluded_differ = ledger$attribute[!ledger$covered & !isTRUE(ledger$equal)],
+    pass_all_columns = isTRUE(comparison$pass)
+  )
+
   changed <- dplyr::filter(lineage, .data$class == "changed")$column
   failing <- dplyr::filter(comparison$per_attribute, !isTRUE(.data$equal))$attribute
   pair_cols <- intersect(union(changed, failing), names(left$attributes))
@@ -87,6 +103,7 @@ validate_dataset <- function(spec, print = TRUE) {
     drilldown_ok = all(grain_check$unique) && keys_ok,
     unique_grain = unique_grain,
     comparison = comparison,
+    verdict = verdict,
     ledger = ledger,
     draft_spec = draft_spec,
     lineage = lineage,

@@ -102,9 +102,18 @@ a shape-independent canonical form and compared as **multisets**:
 3. Normalize each value (below) and **drop** triples whose value is NA/empty.
 4. Compare the **bag** of triples — counts per distinct triple, not sets.
 
-**Pass = identical bags.** Order is never checked. Repeated
-`(entity, attribute)` values are kept rather than deduplicated, so genuine
-repeats are covered without an occurrence index.
+**Pass = identical bags over the columns a check covers**, plus identical
+entity-key rosters. Order is never checked. Repeated `(entity, attribute)`
+values are kept rather than deduplicated, so genuine repeats are covered
+without an occurrence index.
+
+A column classed `new` or `dropped`, or present on one side only, has no ground
+truth by definition: it can neither pass nor fail, so it is a **gap** rather
+than a verdict input. Counting such a column would make the verdict turn on
+data nothing can assert — the MIV tracking columns are stamped with the run
+date, so an all-columns verdict flipped purely on the calendar. The exclusion
+is never silent: the verdict names every excluded column, and says explicitly
+when an excluded column *does* differ.
 
 The comparison is factored by attribute rather than materialising one 25M-row
 triple table. This is not a weakening: `attribute` is part of every triple, so
@@ -241,7 +250,9 @@ so the absence of a check is printed as loudly as a failure:
    lookup exists or the column is "asserted by nothing".
 6. **Schema-diff residue** — raw columns present on one side only.
 7. **Draft lineage spec**, content-matched, for review.
-8. **Verdict**, with a capped set of example diverging triples.
+8. **Verdict** over the covered columns, naming every column excluded for want
+   of a check, and a capped set of example diverging triples — covered columns
+   only, since only those can cause a failure.
 9. **Honest limits of the run.**
 
 ### Changed columns are not self-certifying
@@ -261,6 +272,8 @@ one-time review is the actual assertion of intent**.
 - `changed` columns are test-strength only, bounded by the reviewed lookup.
 - A reshape is covered only where both sides reduce to the same triple grain.
 - Row order is never checked — bag semantics by design.
+- The verdict covers only columns with an applicable check; the rest are
+  reported as gaps, listed by name, and asserted by nothing.
 
 ## Known gap
 
@@ -286,6 +299,9 @@ unavailable, build them with the two bridge scripts below instead.
 export against the known-final. It **passes** — identical rosters and exact
 multiset equality on all eight substantive columns across 1'275'792 rows, with
 nothing stubbed, so the file reading and encoding detection are covered too.
+`erstpublikation` and `letzte_aktualisierung` are excluded and reported as
+gaps: they are stamped with the run date, so they agree only when the run
+happens on the day the known-final was produced.
 
 `configs/miv_stadt.R` compares the *older published* export against the same
 known-final and fails, correctly: those two genuinely differ. See `FINDINGS.md`.
