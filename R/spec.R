@@ -187,10 +187,12 @@ restrict_to_keys <- function(side, keys) {
 #' @param pairs A `changed_value_pairs()` result.
 #' @param lookup A tibble with `known_final` and `new_output` columns, supplied
 #'   by the user and reviewed once. `NULL` means no lookup exists.
+#' @param na_string Logical. The dataset's `"NA"`-to-`NA` setting, so the
+#'   lookup is normalized exactly as the data was.
 #' @return `pairs` with an `in_lookup` column, carrying an `unused_lookup`
 #'   attribute listing reviewed entries absent from the data.
 #' @export
-annotate_with_lookup <- function(pairs, lookup = NULL) {
+annotate_with_lookup <- function(pairs, lookup = NULL, na_string = TRUE) {
   if (!is.null(lookup) &&
         !(is.data.frame(lookup) &&
             all(c("known_final", "new_output") %in% colnames(lookup)))) {
@@ -206,8 +208,15 @@ annotate_with_lookup <- function(pairs, lookup = NULL) {
     return(pairs)
   }
 
-  observed <- paste0(pairs$known_final, "\x1f", pairs$new_output)
-  reviewed <- paste0(lookup$known_final, "\x1f", lookup$new_output)
+  # The lookup is hand-written, in whatever locale the config file happened to
+  # be parsed in, so it is normalized exactly as the data was before matching.
+  # Without this the comparison is encoding-fragile: a literal like "Bären" in
+  # a non-UTF-8 session carries identical BYTES to the normalized value but a
+  # different encoding MARK, so `%in%` reports no match and every reviewed pair
+  # silently reads as unexplained.
+  norm <- function(x) normalize_string(x, na_string)$value
+  observed <- paste0(norm(pairs$known_final), "\x1f", norm(pairs$new_output))
+  reviewed <- paste0(norm(lookup$known_final), "\x1f", norm(lookup$new_output))
 
   pairs$in_lookup <- observed %in% reviewed
   attr(pairs, "unused_lookup") <- lookup[!reviewed %in% observed, , drop = FALSE]

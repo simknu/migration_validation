@@ -64,7 +64,8 @@ validate_dataset <- function(spec, print = TRUE) {
     stats::setNames(pair_cols, pair_cols),
     function(nm) annotate_with_lookup(
       changed_value_pairs(left, right, nm),
-      lookups[[nm]]
+      lookups[[nm]],
+      spec[["na_string"]] %||% TRUE
     )
   )
 
