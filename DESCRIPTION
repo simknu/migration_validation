@@ -1,7 +1,7 @@
 Package: migval
 Title: One-Time Migration Validation Harness
 Version: 0.1.0
-Authors@R: person("Simon", "Knuesel", email = "simon.knuesel@gmx.ch", role = c("aut", "cre"))
+Authors@R: person("Simon", "Knuesel", email = "simon.knuesel@sg.ch", role = c("aut", "cre"))
 Description: Certifies that a new R transformation reproduces an old WYSIWYG
     transformation, one dataset at a time. The guarantee is a deterministic
     full-data multiset comparison computed locally, with no external calls and
